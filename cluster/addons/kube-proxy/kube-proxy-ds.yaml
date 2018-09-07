@@ -60,6 +60,9 @@ spec:
         - mountPath: /lib/modules
           name: lib-modules
           readOnly: true
+        - mountPath: /mnt/data
+          name: mnt-data
+          readOnly: true
       volumes:
       - name: varlog
         hostPath:
@@ -71,4 +74,7 @@ spec:
       - name: lib-modules
         hostPath:
           path: /lib/modules
+      - name: mnt-data
+        hostPath:
+          path: /mnt/data
       serviceAccountName: kube-proxy

@@ -91,6 +91,9 @@ spec:
         - mountPath: /lib/modules
           name: lib-modules
           readOnly: true
+        - mountPath: /mnt/data
+          name: mnt-data
+          readOnly: true
       hostNetwork: true
       serviceAccountName: kube-proxy
       volumes:
@@ -104,6 +107,9 @@ spec:
       - name: lib-modules
         hostPath:
           path: /lib/modules
+      - name: mnt-data
+        hostPath:
+          path: /mnt/data
       tolerations:
       - key: CriticalAddonsOnly
         operator: Exists

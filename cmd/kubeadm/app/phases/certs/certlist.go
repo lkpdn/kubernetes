@@ -103,30 +103,28 @@ type CertificateTree map[*KubeadmCert]Certificates
 // CreateTree creates the CAs, certs signed by the CAs, and writes them all to disk.
 func (t CertificateTree) CreateTree(ic *kubeadmapi.InitConfiguration) error {
 	for ca, leaves := range t {
-		cfg, err := ca.GetConfig(ic)
+		caCert, caKey, err := LoadCertificateAuthority(ic.CertificatesDir, ca.BaseName)
 		if err != nil {
-			return err
-		}
-
-		caCert, caKey, err := NewCACertAndKey(cfg)
-		if err != nil {
-			return err
+			cfg, err := ca.GetConfig(ic)
+			caCert, caKey, err = NewCACertAndKey(cfg)
+			if err != nil {
+				return err
+			}
+			err = writeCertificateAuthorithyFilesIfNotExist(
+				ic.CertificatesDir,
+				ca.BaseName,
+				caCert,
+				caKey,
+			)
+			if err != nil {
+				return err
+			}
 		}
 
 		for _, leaf := range leaves {
 			if err := leaf.CreateFromCA(ic, caCert, caKey); err != nil {
 				return err
 			}
-		}
-
-		err = writeCertificateAuthorithyFilesIfNotExist(
-			ic.CertificatesDir,
-			ca.BaseName,
-			caCert,
-			caKey,
-		)
-		if err != nil {
-			return err
 		}
 	}
 	return nil

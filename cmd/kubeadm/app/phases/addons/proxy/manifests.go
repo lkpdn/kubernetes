@@ -90,6 +90,9 @@ spec:
         - mountPath: /lib/modules
           name: lib-modules
           readOnly: true
+        - mountPath: /mnt/data
+          name: mnt-data
+          readOnly: true
         env:
           - name: NODE_NAME
             valueFrom:
@@ -108,6 +111,9 @@ spec:
       - name: lib-modules
         hostPath:
           path: /lib/modules
+      - name: mnt-data
+        hostPath:
+          path: /mnt/data
       tolerations:
       - key: CriticalAddonsOnly
         operator: Exists

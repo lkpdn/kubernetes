@@ -109,114 +109,67 @@ func TestMakeCertTree(t *testing.T) {
 }
 
 func TestCreateCertificateChain(t *testing.T) {
-	rootCACert := &KubeadmCert{
-		config:   certutil.Config{},
-		Name:     "test-ca",
-		BaseName: "test-ca",
+	dir, err := ioutil.TempDir("", t.Name())
+	if err != nil {
+		t.Fatal(err)
 	}
-	daughterCert := &KubeadmCert{
-		config: certutil.Config{
-			AltNames: certutil.AltNames{
-				DNSNames: []string{"test-domain.space"},
-			},
-			Usages: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
-		},
-		configMutators: []configMutatorsFunc{
-			setCommonNameToNodeName(),
-		},
-		CAName:   "test-ca",
-		Name:     "test-daughter",
-		BaseName: "test-daughter",
-	}
+	defer os.RemoveAll(dir)
 
-	table := []struct {
-		name           string
-		order          []Certificates
-		expectedErrors bool
-	}{
-		{
-			name: "newly create both CA and signed cert all at once",
-			order: []Certificates{
-				Certificates{rootCACert, daughterCert},
-			},
+	ic := &kubeadmapi.InitConfiguration{
+		NodeRegistration: kubeadmapi.NodeRegistrationOptions{
+			Name: "test-node",
 		},
-		{
-			name: "create a certificate signed by existing CA",
-			order: []Certificates{
-				Certificates{rootCACert},
-				Certificates{rootCACert, daughterCert},
-			},
-		},
-		{
-			name: "ensure CA would not be regenerated signing existing daughter",
-			order: []Certificates{
-				Certificates{rootCACert, daughterCert},
-				Certificates{rootCACert},
-			},
-		},
-		{
-			name: "missing CA",
-			order: []Certificates{
-				Certificates{daughterCert},
-			},
-			expectedErrors: true,
+		ClusterConfiguration: kubeadmapi.ClusterConfiguration{
+			CertificatesDir: dir,
 		},
 	}
 
-	for _, item := range table {
-		errors := []error{}
-		t.Run(item.name, func(t *testing.T) {
-			dir, err := ioutil.TempDir("", "test-create-certificate-chain")
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer os.RemoveAll(dir)
-
-			ic := &kubeadmapi.InitConfiguration{
-				NodeRegistration: kubeadmapi.NodeRegistrationOptions{
-					Name: "test-node",
+	caCfg := Certificates{
+		{
+			config:   certutil.Config{},
+			Name:     "test-ca",
+			BaseName: "test-ca",
+		},
+		{
+			config: certutil.Config{
+				AltNames: certutil.AltNames{
+					DNSNames: []string{"test-domain.space"},
 				},
-				ClusterConfiguration: kubeadmapi.ClusterConfiguration{
-					CertificatesDir: dir,
-				},
-			}
-
-			for _, caCfg := range item.order {
-				certTree, err := caCfg.AsMap().CertTree()
-				if err != nil {
-					errors = append(errors, err)
-				}
-
-				if certTree.CreateTree(ic); err != nil {
-					errors = append(errors, err)
-				}
-			}
-
-			if len(errors) == 0 {
-				caCert, _ := parseCertAndKey(path.Join(dir, "test-ca"), t)
-				daughterCert, _ := parseCertAndKey(path.Join(dir, "test-daughter"), t)
-
-				pool := x509.NewCertPool()
-				pool.AddCert(caCert)
-
-				_, err = daughterCert.Verify(x509.VerifyOptions{
-					DNSName:   "test-domain.space",
-					Roots:     pool,
-					KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
-				})
-				if err != nil {
-					errors = append(errors, err)
-				}
-			}
-
-			if len(errors) == 0 && item.expectedErrors {
-				t.Errorf("Expected errors, got no error")
-			}
-			if len(errors) > 0 && !item.expectedErrors {
-				t.Errorf("Got unexpected errors: %v", errors)
-			}
-		})
+				Usages: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+			},
+			configMutators: []configMutatorsFunc{
+				setCommonNameToNodeName(),
+			},
+			CAName:   "test-ca",
+			Name:     "test-daughter",
+			BaseName: "test-daughter",
+		},
 	}
+
+	certTree, err := caCfg.AsMap().CertTree()
+	if err != nil {
+		t.Fatalf("unexpected error getting tree: %v", err)
+	}
+
+	if certTree.CreateTree(ic); err != nil {
+		t.Fatal(err)
+	}
+
+	caCert, _ := parseCertAndKey(path.Join(dir, "test-ca"), t)
+	daughterCert, _ := parseCertAndKey(path.Join(dir, "test-daughter"), t)
+
+	pool := x509.NewCertPool()
+	pool.AddCert(caCert)
+
+	_, err = daughterCert.Verify(x509.VerifyOptions{
+		DNSName:   "test-domain.space",
+		Roots:     pool,
+		KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+	})
+	if err != nil {
+		t.Errorf("couldn't verify daughter cert: %v", err)
+	}
+
 }
 
 func parseCertAndKey(basePath string, t *testing.T) (*x509.Certificate, crypto.PrivateKey) {

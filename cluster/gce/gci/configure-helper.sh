@@ -43,6 +43,40 @@ function setup-os-params {
   echo "core.%e.%p.%t" > /proc/sys/kernel/core_pattern
 }
 
+# secure_random generates a secure random string of bytes. This function accepts
+# a number of secure bytes desired and returns a base64 encoded string with at
+# least the requested entropy. Rather than directly reading from /dev/urandom,
+# we use uuidgen which calls getrandom(2). getrandom(2) verifies that the
+# entropy pool has been initialized sufficiently for the desired operation
+# before reading from /dev/urandom.
+#
+# ARGS:
+#   #1: number of secure bytes to generate. We round up to the nearest factor of 32.
+function secure_random {
+  local infobytes="${1}"
+  if ((infobytes <= 0)); then
+    echo "Invalid argument to secure_random: infobytes='${infobytes}'" 1>&2
+    return 1
+  fi
+
+  local out=""
+  for (( i = 0; i < "${infobytes}"; i += 32 )); do
+    # uuids have 122 random bits, sha256 sums have 256 bits, so concatenate
+    # three uuids and take their sum. The sum is encoded in ASCII hex, hence the
+    # 64 character cut.
+    out+="$(
+     (
+       uuidgen --random;
+       uuidgen --random;
+       uuidgen --random;
+     ) | sha256sum \
+       | head -c 64
+    )";
+  done
+  # Finally, convert the ASCII hex to base64 to increase the density.
+  echo -n "${out}" | xxd -r -p | base64 -w 0
+}
+
 function config-ip-firewall {
   echo "Configuring IP firewall rules"
 
@@ -2514,10 +2548,14 @@ EOF
       setup-addon-manifests "addons" "istio/noauth"
     fi
   fi
+  if [[ "${FEATURE_GATES:-}" =~ "RuntimeClass=true" ]]; then
+    setup-addon-manifests "addons" "runtimeclass"
+  fi
   if [[ -n "${EXTRA_ADDONS_URL:-}" ]]; then
     download-extra-addons
     setup-addon-manifests "addons" "gce-extras"
   fi
+
 
   # Place addon manager pod manifest.
   src_file="${src_dir}/kube-addon-manager.yaml"
@@ -2530,14 +2568,6 @@ function setup-node-termination-handler-manifest {
     if [[ -n "${NODE_TERMINATION_HANDLER_IMAGE}" ]]; then
         sed -i "s|image:.*|image: ${NODE_TERMINATION_HANDLER_IMAGE}|" "${nth_manifest}"
     fi 
-}
-
-# Starts an image-puller - used in test clusters.
-function start-image-puller {
-  echo "Start image-puller"
-  local -r e2e_image_puller_manifest="${KUBE_HOME}/kube-manifests/kubernetes/gci-trusty/e2e-image-puller.manifest"
-  update-container-runtime "${e2e_image_puller_manifest}"
-  cp "${e2e_image_puller_manifest}" /etc/kubernetes/manifests/
 }
 
 # Setups manifests for ingress controller and gce-specific policies for service controller.
@@ -2700,9 +2730,9 @@ function main() {
   fi
 
   # generate the controller manager, scheduler and cluster autoscaler tokens here since they are only used on the master.
-  KUBE_CONTROLLER_MANAGER_TOKEN=$(dd if=/dev/urandom bs=128 count=1 2>/dev/null | base64 | tr -d "=+/" | dd bs=32 count=1 2>/dev/null)
-  KUBE_SCHEDULER_TOKEN=$(dd if=/dev/urandom bs=128 count=1 2>/dev/null | base64 | tr -d "=+/" | dd bs=32 count=1 2>/dev/null)
-  KUBE_CLUSTER_AUTOSCALER_TOKEN=$(dd if=/dev/urandom bs=128 count=1 2>/dev/null | base64 | tr -d "=+/" | dd bs=32 count=1 2>/dev/null)
+  KUBE_CONTROLLER_MANAGER_TOKEN="$(secure_random 32)"
+  KUBE_SCHEDULER_TOKEN="$(secure_random 32)"
+  KUBE_CLUSTER_AUTOSCALER_TOKEN="$(secure_random 32)"
 
   setup-os-params
   config-ip-firewall
@@ -2750,9 +2780,6 @@ function main() {
   else
     if [[ "${KUBE_PROXY_DAEMONSET:-}" != "true" ]]; then
       start-kube-proxy
-    fi
-    if [[ "${PREPULL_E2E_IMAGES:-}" == "true" ]]; then
-      start-image-puller
     fi
     if [[ "${ENABLE_NODE_PROBLEM_DETECTOR:-}" == "standalone" ]]; then
       start-node-problem-detector

@@ -60,6 +60,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/restmapper"
 	certutil "k8s.io/client-go/util/cert"
+	cloudprovider "k8s.io/cloud-provider"
 	aggregatorapiserver "k8s.io/kube-aggregator/pkg/apiserver"
 	aggregatorscheme "k8s.io/kube-aggregator/pkg/apiserver/scheme"
 	openapi "k8s.io/kube-openapi/pkg/common"
@@ -68,7 +69,6 @@ import (
 	"k8s.io/kubernetes/pkg/capabilities"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
 	informers "k8s.io/kubernetes/pkg/client/informers/informers_generated/internalversion"
-	"k8s.io/kubernetes/pkg/cloudprovider"
 	serviceaccountcontroller "k8s.io/kubernetes/pkg/controller/serviceaccount"
 	"k8s.io/kubernetes/pkg/features"
 	generatedopenapi "k8s.io/kubernetes/pkg/generated/openapi"
@@ -81,7 +81,7 @@ import (
 	"k8s.io/kubernetes/pkg/master"
 	"k8s.io/kubernetes/pkg/master/reconcilers"
 	"k8s.io/kubernetes/pkg/master/tunneler"
-	quotainstall "k8s.io/kubernetes/pkg/quota/install"
+	quotainstall "k8s.io/kubernetes/pkg/quota/v1/install"
 	"k8s.io/kubernetes/pkg/registry/cachesize"
 	rbacrest "k8s.io/kubernetes/pkg/registry/rbac/rest"
 	"k8s.io/kubernetes/pkg/serviceaccount"
@@ -699,27 +699,6 @@ func Complete(s *options.ServerRunOptions) (completedServerRunOptions, error) {
 		}
 	}
 
-	if s.Etcd.StorageConfig.DeserializationCacheSize == 0 {
-		// When size of cache is not explicitly set, estimate its size based on
-		// target memory usage.
-		glog.V(2).Infof("Initializing deserialization cache size based on %dMB limit", s.GenericServerRunOptions.TargetRAMMB)
-
-		// This is the heuristics that from memory capacity is trying to infer
-		// the maximum number of nodes in the cluster and set cache sizes based
-		// on that value.
-		// From our documentation, we officially recommend 120GB machines for
-		// 2000 nodes, and we scale from that point. Thus we assume ~60MB of
-		// capacity per node.
-		// TODO: We may consider deciding that some percentage of memory will
-		// be used for the deserialization cache and divide it by the max object
-		// size to compute its size. We may even go further and measure
-		// collective sizes of the objects in the cache.
-		clusterSize := s.GenericServerRunOptions.TargetRAMMB / 60
-		s.Etcd.StorageConfig.DeserializationCacheSize = 25 * clusterSize
-		if s.Etcd.StorageConfig.DeserializationCacheSize < 1000 {
-			s.Etcd.StorageConfig.DeserializationCacheSize = 1000
-		}
-	}
 	if s.Etcd.EnableWatchCache {
 		glog.V(2).Infof("Initializing cache sizes based on %dMB limit", s.GenericServerRunOptions.TargetRAMMB)
 		sizes := cachesize.NewHeuristicWatchCacheSizes(s.GenericServerRunOptions.TargetRAMMB)

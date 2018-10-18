@@ -23,7 +23,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	kubeadmapiv1alpha3 "k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm/v1alpha3"
+	kubeadmapiv1beta1 "k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm/v1beta1"
 	"k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm/validation"
 	kubeadmconstants "k8s.io/kubernetes/cmd/kubeadm/app/constants"
 	"k8s.io/kubernetes/cmd/kubeadm/app/preflight"
@@ -55,8 +55,8 @@ func assertDirEmpty(t *testing.T, path string) {
 
 func TestNewReset(t *testing.T) {
 	var in io.Reader
-	certsDir := kubeadmapiv1alpha3.DefaultCertificatesDir
-	criSocketPath := kubeadmapiv1alpha3.DefaultCRISocket
+	certsDir := kubeadmapiv1beta1.DefaultCertificatesDir
+	criSocketPath := kubeadmapiv1beta1.DefaultCRISocket
 	forceReset := true
 
 	ignorePreflightErrors := []string{"all"}
@@ -66,22 +66,6 @@ func TestNewReset(t *testing.T) {
 	ignorePreflightErrors = []string{}
 	ignorePreflightErrorsSet, _ = validation.ValidateIgnorePreflightErrors(ignorePreflightErrors)
 	NewReset(in, ignorePreflightErrorsSet, forceReset, certsDir, criSocketPath)
-}
-
-func TestNewCmdReset(t *testing.T) {
-	var out io.Writer
-	var in io.Reader
-	cmd := NewCmdReset(in, out)
-
-	tmpDir, err := ioutil.TempDir("", "kubeadm-reset-test")
-	if err != nil {
-		t.Errorf("Unable to create temporary directory: %v", err)
-	}
-	args := []string{"--ignore-preflight-errors=all", "--cert-dir=" + tmpDir, "--force"}
-	cmd.SetArgs(args)
-	if err := cmd.Execute(); err != nil {
-		t.Errorf("Cannot execute reset command: %v", err)
-	}
 }
 
 func TestConfigDirCleaner(t *testing.T) {

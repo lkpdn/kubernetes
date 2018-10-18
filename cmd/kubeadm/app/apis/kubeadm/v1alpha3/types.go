@@ -70,7 +70,7 @@ type ClusterConfiguration struct {
 	// are used; in case the ControlPlaneEndpoint is specified but without a TCP port,
 	// the BindPort is used.
 	// Possible usages are:
-	// e.g. In an cluster with more than one control plane instances, this field should be
+	// e.g. In a cluster with more than one control plane instances, this field should be
 	// assigned the address of the external load balancer in front of the
 	// control plane instances.
 	// e.g.  in environments with enforced node recycling, the ControlPlaneEndpoint
@@ -234,9 +234,7 @@ type LocalEtcd struct {
 
 // ExternalEtcd describes an external etcd cluster
 type ExternalEtcd struct {
-
-	// Endpoints of etcd members. Useful for using external etcd.
-	// If not provided, kubeadm will run etcd in a static pod.
+	// Endpoints of etcd members. Required for ExternalEtcd.
 	Endpoints []string `json:"endpoints"`
 	// CAFile is an SSL Certificate Authority file used to secure etcd communication.
 	CAFile string `json:"caFile"`

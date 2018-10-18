@@ -63,6 +63,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/uuid"
+	utilversion "k8s.io/apimachinery/pkg/util/version"
 	"k8s.io/apimachinery/pkg/util/wait"
 	utilyaml "k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/apimachinery/pkg/watch"
@@ -97,7 +98,6 @@ import (
 	sshutil "k8s.io/kubernetes/pkg/ssh"
 	"k8s.io/kubernetes/pkg/util/system"
 	taintutils "k8s.io/kubernetes/pkg/util/taints"
-	utilversion "k8s.io/kubernetes/pkg/util/version"
 	"k8s.io/kubernetes/test/e2e/framework/ginkgowrapper"
 	testutils "k8s.io/kubernetes/test/utils"
 	imageutils "k8s.io/kubernetes/test/utils/image"
@@ -114,10 +114,13 @@ const (
 	// Same as `PodStartTimeout` to wait for the pod to be started, but shorter.
 	// Use it case by case when we are sure pod start will not be delayed
 	// minutes by slow docker pulls or something else.
-	PodStartShortTimeout = 1 * time.Minute
+	PodStartShortTimeout = 2 * time.Minute
 
 	// How long to wait for a pod to be deleted
 	PodDeleteTimeout = 5 * time.Minute
+
+	// PodEventTimeout is how much we wait for a pod event to occur.
+	PodEventTimeout = 2 * time.Minute
 
 	// If there are any orphaned namespaces to clean up, this test is running
 	// on a long lived cluster. A long wait here is preferably to spurious test
@@ -1460,6 +1463,25 @@ func podRunning(c clientset.Interface, podName, namespace string) wait.Condition
 	}
 }
 
+// WaitTimeoutForPodEvent waits for an event to occur for a pod
+func WaitTimeoutForPodEvent(c clientset.Interface, podName, namespace, eventSelector, msg string, timeout time.Duration) error {
+	return wait.PollImmediate(Poll, timeout, eventOccurred(c, podName, namespace, eventSelector, msg))
+}
+
+func eventOccurred(c clientset.Interface, podName, namespace, eventSelector, msg string) wait.ConditionFunc {
+	options := metav1.ListOptions{FieldSelector: eventSelector}
+	return func() (bool, error) {
+		events, err := c.CoreV1().Events(namespace).List(options)
+		if err != nil {
+			return false, fmt.Errorf("got error while getting pod events: %s", err)
+		}
+		if len(events.Items) == 0 {
+			return false, nil // no events have occurred yet
+		}
+		return strings.Contains(events.Items[0].Message, msg), nil
+	}
+}
+
 // Waits default amount of time (DefaultPodDeletionTimeout) for the specified pod to stop running.
 // Returns an error if timeout occurs first.
 func WaitForPodNoLongerRunningInNamespace(c clientset.Interface, podName, namespace string) error {
@@ -1770,7 +1792,7 @@ func WaitForEndpoint(c clientset.Interface, ns, name string) error {
 }
 
 // Context for checking pods responses by issuing GETs to them (via the API
-// proxy) and verifying that they answer with there own pod name.
+// proxy) and verifying that they answer with their own pod name.
 type podProxyResponseChecker struct {
 	c              clientset.Interface
 	ns             string
@@ -4153,7 +4175,9 @@ func CheckNodesReady(c clientset.Interface, size int, timeout time.Duration) ([]
 
 		// Filter out not-ready nodes.
 		FilterNodes(nodes, func(node v1.Node) bool {
-			return IsNodeConditionSetAsExpected(&node, v1.NodeReady, true)
+			nodeReady := IsNodeConditionSetAsExpected(&node, v1.NodeReady, true)
+			networkReady := IsNodeConditionUnset(&node, v1.NodeNetworkUnavailable) || IsNodeConditionSetAsExpected(&node, v1.NodeNetworkUnavailable, false)
+			return nodeReady && networkReady
 		})
 		numReady := len(nodes.Items)
 

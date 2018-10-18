@@ -110,7 +110,7 @@ func CreateCACertAndKeyFiles(certSpec *KubeadmCert, cfg *kubeadmapi.InitConfigur
 	if certSpec.CAName != "" {
 		return fmt.Errorf("This function should only be used for CAs, but cert %s has CA %s", certSpec.Name, certSpec.CAName)
 	}
-	glog.V(1).Infoln("creating a new certificate authority for %s", certSpec.Name)
+	glog.V(1).Infof("creating a new certificate authority for %s", certSpec.Name)
 
 	certConfig, err := certSpec.GetConfig(cfg)
 	if err != nil {
@@ -143,19 +143,6 @@ func CreateCertAndKeyFilesWithCA(certSpec *KubeadmCert, caCertSpec *KubeadmCert,
 	}
 
 	return certSpec.CreateFromCA(cfg, caCert, caKey)
-}
-
-func newCertAndKeyFromSpec(certSpec *KubeadmCert, cfg *kubeadmapi.InitConfiguration, caCert *x509.Certificate, caKey *rsa.PrivateKey) (*x509.Certificate, *rsa.PrivateKey, error) {
-	certConfig, err := certSpec.GetConfig(cfg)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failure while creating certificate %s: %v", certSpec.Name, err)
-	}
-	cert, key, err := pkiutil.NewCertAndKey(caCert, caKey, certConfig)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failure while creating %s key and certificate: %v", certSpec.Name, err)
-	}
-
-	return cert, key, err
 }
 
 // LoadCertificateAuthority tries to load a CA in the given directory with the given name.

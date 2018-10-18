@@ -26,9 +26,9 @@ import (
 	"k8s.io/apiserver/pkg/util/flag"
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
-	"k8s.io/kubernetes/pkg/kubectl/cmd/templates"
 	cmdutil "k8s.io/kubernetes/pkg/kubectl/cmd/util"
 	"k8s.io/kubernetes/pkg/kubectl/util/i18n"
+	"k8s.io/kubernetes/pkg/kubectl/util/templates"
 )
 
 type createContextOptions struct {
@@ -55,11 +55,11 @@ func NewCmdConfigSetContext(out io.Writer, configAccess clientcmd.ConfigAccess) 
 	options := &createContextOptions{configAccess: configAccess}
 
 	cmd := &cobra.Command{
-		Use: fmt.Sprintf("set-context [NAME | --current] [--%v=cluster_nickname] [--%v=user_nickname] [--%v=namespace]", clientcmd.FlagClusterName, clientcmd.FlagAuthInfoName, clientcmd.FlagNamespace),
+		Use:                   fmt.Sprintf("set-context [NAME | --current] [--%v=cluster_nickname] [--%v=user_nickname] [--%v=namespace]", clientcmd.FlagClusterName, clientcmd.FlagAuthInfoName, clientcmd.FlagNamespace),
 		DisableFlagsInUseLine: true,
-		Short:   i18n.T("Sets a context entry in kubeconfig"),
-		Long:    create_context_long,
-		Example: create_context_example,
+		Short:                 i18n.T("Sets a context entry in kubeconfig"),
+		Long:                  create_context_long,
+		Example:               create_context_example,
 		Run: func(cmd *cobra.Command, args []string) {
 			cmdutil.CheckErr(options.complete(cmd))
 			name, exists, err := options.run()

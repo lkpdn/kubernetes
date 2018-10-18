@@ -195,8 +195,21 @@ func DescriberFor(kind schema.GroupKind, clientConfig *rest.Config) (printers.De
 
 // GenericDescriberFor returns a generic describer for the specified mapping
 // that uses only information available from runtime.Unstructured
-func GenericDescriberFor(mapping *meta.RESTMapping, dynamic dynamic.Interface, events coreclient.EventsGetter) printers.Describer {
-	return &genericDescriber{mapping, dynamic, events}
+func GenericDescriberFor(mapping *meta.RESTMapping, clientConfig *rest.Config) (printers.Describer, bool) {
+	// used to fetch the resource
+	dynamicClient, err := dynamic.NewForConfig(clientConfig)
+	if err != nil {
+		return nil, false
+	}
+
+	// used to get events for the resource
+	clientSet, err := clientset.NewForConfig(clientConfig)
+	if err != nil {
+		return nil, false
+	}
+	eventsClient := clientSet.Core()
+
+	return &genericDescriber{mapping, dynamicClient, eventsClient}, true
 }
 
 type genericDescriber struct {
@@ -3093,8 +3106,8 @@ func describeHorizontalPodAutoscaler(hpa *autoscaling.HorizontalPodAutoscaler, e
 
 func describeNodeResource(nodeNonTerminatedPodsList *api.PodList, node *api.Node, w PrefixWriter) {
 	w.Write(LEVEL_0, "Non-terminated Pods:\t(%d in total)\n", len(nodeNonTerminatedPodsList.Items))
-	w.Write(LEVEL_1, "Namespace\tName\t\tCPU Requests\tCPU Limits\tMemory Requests\tMemory Limits\n")
-	w.Write(LEVEL_1, "---------\t----\t\t------------\t----------\t---------------\t-------------\n")
+	w.Write(LEVEL_1, "Namespace\tName\t\tCPU Requests\tCPU Limits\tMemory Requests\tMemory Limits\tAGE\n")
+	w.Write(LEVEL_1, "---------\t----\t\t------------\t----------\t---------------\t-------------\t---\n")
 	allocatable := node.Status.Capacity
 	if len(node.Status.Allocatable) > 0 {
 		allocatable = node.Status.Allocatable
@@ -3107,9 +3120,9 @@ func describeNodeResource(nodeNonTerminatedPodsList *api.PodList, node *api.Node
 		fractionCpuLimit := float64(cpuLimit.MilliValue()) / float64(allocatable.Cpu().MilliValue()) * 100
 		fractionMemoryReq := float64(memoryReq.Value()) / float64(allocatable.Memory().Value()) * 100
 		fractionMemoryLimit := float64(memoryLimit.Value()) / float64(allocatable.Memory().Value()) * 100
-		w.Write(LEVEL_1, "%s\t%s\t\t%s (%d%%)\t%s (%d%%)\t%s (%d%%)\t%s (%d%%)\n", pod.Namespace, pod.Name,
+		w.Write(LEVEL_1, "%s\t%s\t\t%s (%d%%)\t%s (%d%%)\t%s (%d%%)\t%s (%d%%)\t%s\n", pod.Namespace, pod.Name,
 			cpuReq.String(), int64(fractionCpuReq), cpuLimit.String(), int64(fractionCpuLimit),
-			memoryReq.String(), int64(fractionMemoryReq), memoryLimit.String(), int64(fractionMemoryLimit))
+			memoryReq.String(), int64(fractionMemoryReq), memoryLimit.String(), int64(fractionMemoryLimit), translateTimestampSince(pod.CreationTimestamp))
 	}
 
 	w.Write(LEVEL_0, "Allocated resources:\n  (Total limits may be over 100 percent, i.e., overcommitted.)\n")

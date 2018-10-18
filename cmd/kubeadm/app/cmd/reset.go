@@ -30,8 +30,9 @@ import (
 	"github.com/spf13/cobra"
 
 	"k8s.io/apimachinery/pkg/util/sets"
-	kubeadmapiv1alpha3 "k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm/v1alpha3"
+	kubeadmapiv1beta1 "k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm/v1beta1"
 	"k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm/validation"
+	"k8s.io/kubernetes/cmd/kubeadm/app/cmd/options"
 	kubeadmconstants "k8s.io/kubernetes/cmd/kubeadm/app/constants"
 	"k8s.io/kubernetes/cmd/kubeadm/app/preflight"
 	kubeadmutil "k8s.io/kubernetes/cmd/kubeadm/app/util"
@@ -60,18 +61,15 @@ func NewCmdReset(in io.Reader, out io.Writer) *cobra.Command {
 		},
 	}
 
-	cmd.PersistentFlags().StringSliceVar(
-		&ignorePreflightErrors, "ignore-preflight-errors", ignorePreflightErrors,
-		"A list of checks whose errors will be shown as warnings. Example: 'IsPrivilegedUser,Swap'. Value 'all' ignores errors from all checks.",
-	)
+	options.AddIgnorePreflightErrorsFlag(cmd.PersistentFlags(), &ignorePreflightErrors)
 
 	cmd.PersistentFlags().StringVar(
-		&certsDir, "cert-dir", kubeadmapiv1alpha3.DefaultCertificatesDir,
+		&certsDir, "cert-dir", kubeadmapiv1beta1.DefaultCertificatesDir,
 		"The path to the directory where the certificates are stored. If specified, clean this directory.",
 	)
 
 	cmd.PersistentFlags().StringVar(
-		&criSocketPath, "cri-socket", kubeadmapiv1alpha3.DefaultCRISocket,
+		&criSocketPath, "cri-socket", kubeadmapiv1beta1.DefaultCRISocket,
 		"The path to the CRI socket to use with crictl when cleaning up containers.",
 	)
 
@@ -169,7 +167,7 @@ func (r *Reset) Run(out io.Writer) error {
 
 	// Remove contents from the config and pki directories
 	glog.V(1).Infoln("[reset] removing contents from the config and pki directories")
-	if r.certsDir != kubeadmapiv1alpha3.DefaultCertificatesDir {
+	if r.certsDir != kubeadmapiv1beta1.DefaultCertificatesDir {
 		glog.Warningf("[reset] WARNING: cleaning a non-default certificates directory: %q\n", r.certsDir)
 	}
 	resetConfigDir(kubeadmconstants.KubernetesDir, r.certsDir)

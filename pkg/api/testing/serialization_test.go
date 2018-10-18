@@ -65,7 +65,7 @@ func fuzzInternalObject(t *testing.T, forVersion schema.GroupVersion, item runti
 	return item
 }
 
-func Convert_v1beta1_ReplicaSet_to_api_ReplicationController(in *v1beta1.ReplicaSet, out *api.ReplicationController, s conversion.Scope) error {
+func ConvertV1beta1ReplicaSetToAPIReplicationController(in *v1beta1.ReplicaSet, out *api.ReplicationController, s conversion.Scope) error {
 	intermediate1 := &extensions.ReplicaSet{}
 	if err := k8s_v1beta1.Convert_v1beta1_ReplicaSet_To_extensions_ReplicaSet(in, intermediate1, s); err != nil {
 		return err
@@ -80,7 +80,7 @@ func Convert_v1beta1_ReplicaSet_to_api_ReplicationController(in *v1beta1.Replica
 }
 
 func TestSetControllerConversion(t *testing.T) {
-	if err := legacyscheme.Scheme.AddConversionFuncs(Convert_v1beta1_ReplicaSet_to_api_ReplicationController); err != nil {
+	if err := legacyscheme.Scheme.AddConversionFuncs(ConvertV1beta1ReplicaSetToAPIReplicationController); err != nil {
 		t.Fatal(err)
 	}
 
@@ -214,6 +214,7 @@ func TestRoundTripTypes(t *testing.T) {
 // decoded without information loss or mutation.
 func TestEncodePtr(t *testing.T) {
 	grace := int64(30)
+	enableServiceLinks := v1.DefaultEnableServiceLinks
 	pod := &api.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Labels: map[string]string{"name": "foo"},
@@ -224,8 +225,9 @@ func TestEncodePtr(t *testing.T) {
 
 			TerminationGracePeriodSeconds: &grace,
 
-			SecurityContext: &api.PodSecurityContext{},
-			SchedulerName:   api.DefaultSchedulerName,
+			SecurityContext:    &api.PodSecurityContext{},
+			SchedulerName:      api.DefaultSchedulerName,
+			EnableServiceLinks: &enableServiceLinks,
 		},
 	}
 	obj := runtime.Object(pod)
@@ -239,6 +241,29 @@ func TestEncodePtr(t *testing.T) {
 	}
 	if !apiequality.Semantic.DeepEqual(obj2, pod) {
 		t.Errorf("\nExpected:\n\n %#v,\n\nGot:\n\n %#vDiff: %v\n\n", pod, obj2, diff.ObjectDiff(obj2, pod))
+	}
+}
+
+func TestDecodeTimeStampWithoutQuotes(t *testing.T) {
+	testYAML := []byte(`
+apiVersion: v1
+kind: Pod
+metadata:
+  creationTimestamp: 2018-08-30T14:10:58Z
+  name: test
+spec:
+  containers: null
+status: {}`)
+	if obj, err := runtime.Decode(testapi.Default.Codec(), testYAML); err != nil {
+		t.Fatalf("unable to decode yaml: %v", err)
+	} else {
+		if obj2, ok := obj.(*api.Pod); !ok {
+			t.Fatalf("Got wrong type")
+		} else {
+			if obj2.ObjectMeta.CreationTimestamp.UnixNano() != parseTimeOrDie("2018-08-30T14:10:58Z").UnixNano() {
+				t.Fatalf("Time stamps do not match")
+			}
+		}
 	}
 }
 

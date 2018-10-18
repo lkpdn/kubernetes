@@ -72,11 +72,11 @@ func NewOperationGenerator(kubeClient clientset.Interface,
 	blkUtil volumepathhandler.BlockVolumePathHandler) OperationGenerator {
 
 	return &operationGenerator{
-		kubeClient:      kubeClient,
-		volumePluginMgr: volumePluginMgr,
-		recorder:        recorder,
+		kubeClient:                       kubeClient,
+		volumePluginMgr:                  volumePluginMgr,
+		recorder:                         recorder,
 		checkNodeCapabilitiesBeforeMount: checkNodeCapabilitiesBeforeMount,
-		blkUtil: blkUtil,
+		blkUtil:                          blkUtil,
 	}
 }
 
@@ -1079,22 +1079,9 @@ func (og *operationGenerator) GenerateUnmapDeviceFunc(
 			return deviceToDetach.GenerateError("UnmapDevice failed", err)
 		}
 
-		// Execute tear down device
-		unmapErr := blockVolumeUnmapper.TearDownDevice(globalMapPath, deviceToDetach.DevicePath)
-		if unmapErr != nil {
-			// On failure, return error. Caller will log and retry.
-			return deviceToDetach.GenerateError("UnmapDevice.TearDownDevice failed", unmapErr)
-		}
-
-		// Plugin finished TearDownDevice(). Now globalMapPath dir and plugin's stored data
-		// on the dir are unnecessary, clean up it.
-		removeMapPathErr := og.blkUtil.RemoveMapPath(globalMapPath)
-		if removeMapPathErr != nil {
-			// On failure, return error. Caller will log and retry.
-			return deviceToDetach.GenerateError("UnmapDevice failed", removeMapPathErr)
-		}
-
 		// The block volume is not referenced from Pods. Release file descriptor lock.
+		// This should be done before calling TearDownDevice, because some plugins that do local detach
+		// in TearDownDevice will fail in detaching device due to the refcnt on the loopback device.
 		glog.V(4).Infof("UnmapDevice: deviceToDetach.DevicePath: %v", deviceToDetach.DevicePath)
 		loopPath, err := og.blkUtil.GetLoopDevice(deviceToDetach.DevicePath)
 		if err != nil {
@@ -1111,6 +1098,21 @@ func (og *operationGenerator) GenerateUnmapDeviceFunc(
 					return deviceToDetach.GenerateError("UnmapDevice.RemoveLoopDevice failed", err)
 				}
 			}
+		}
+
+		// Execute tear down device
+		unmapErr := blockVolumeUnmapper.TearDownDevice(globalMapPath, deviceToDetach.DevicePath)
+		if unmapErr != nil {
+			// On failure, return error. Caller will log and retry.
+			return deviceToDetach.GenerateError("UnmapDevice.TearDownDevice failed", unmapErr)
+		}
+
+		// Plugin finished TearDownDevice(). Now globalMapPath dir and plugin's stored data
+		// on the dir are unnecessary, clean up it.
+		removeMapPathErr := og.blkUtil.RemoveMapPath(globalMapPath)
+		if removeMapPathErr != nil {
+			// On failure, return error. Caller will log and retry.
+			return deviceToDetach.GenerateError("UnmapDevice.RemoveMapPath failed", removeMapPathErr)
 		}
 
 		// Before logging that UnmapDevice succeeded and moving on,
@@ -1433,6 +1435,8 @@ func isDeviceOpened(deviceToDetach AttachedVolume, mounter mount.Interface) (boo
 		//TODO: refer to #36092
 		glog.V(3).Infof("The path isn't device path or doesn't exist. Skip checking device path: %s", deviceToDetach.DevicePath)
 		deviceOpened = false
+	} else if devicePathErr != nil {
+		return false, deviceToDetach.GenerateErrorDetailed("PathIsDevice failed", devicePathErr)
 	} else {
 		deviceOpened, deviceOpenedErr = mounter.DeviceOpened(deviceToDetach.DevicePath)
 		if deviceOpenedErr != nil {

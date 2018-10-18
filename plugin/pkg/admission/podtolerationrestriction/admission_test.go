@@ -30,7 +30,7 @@ import (
 	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset/fake"
 	informers "k8s.io/kubernetes/pkg/client/informers/informers_generated/internalversion"
 	kubeadmission "k8s.io/kubernetes/pkg/kubeapiserver/admission"
-	"k8s.io/kubernetes/pkg/scheduler/algorithm"
+	schedulerapi "k8s.io/kubernetes/pkg/scheduler/api"
 	"k8s.io/kubernetes/pkg/util/tolerations"
 	pluginapi "k8s.io/kubernetes/plugin/pkg/admission/podtolerationrestriction/apis/podtolerationrestriction"
 )
@@ -98,7 +98,7 @@ func TestPodAdmission(t *testing.T) {
 		testName                  string
 	}{
 		{
-			pod: bestEffortPod,
+			pod:                       bestEffortPod,
 			defaultClusterTolerations: []api.Toleration{{Key: "testKey", Operator: "Equal", Value: "testValue", Effect: "NoSchedule", TolerationSeconds: nil}},
 			namespaceTolerations:      nil,
 			podTolerations:            []api.Toleration{},
@@ -107,7 +107,7 @@ func TestPodAdmission(t *testing.T) {
 			testName:                  "default cluster tolerations with empty pod tolerations and nil namespace tolerations",
 		},
 		{
-			pod: bestEffortPod,
+			pod:                       bestEffortPod,
 			defaultClusterTolerations: []api.Toleration{{Key: "testKey", Operator: "Equal", Value: "testValue", Effect: "NoSchedule", TolerationSeconds: nil}},
 			namespaceTolerations:      []api.Toleration{},
 			podTolerations:            []api.Toleration{{Key: "testKey", Operator: "Equal", Value: "testValue", Effect: "NoSchedule", TolerationSeconds: nil}},
@@ -116,7 +116,7 @@ func TestPodAdmission(t *testing.T) {
 			testName:                  "default cluster tolerations with pod tolerations specified",
 		},
 		{
-			pod: bestEffortPod,
+			pod:                       bestEffortPod,
 			defaultClusterTolerations: []api.Toleration{},
 			namespaceTolerations:      []api.Toleration{{Key: "testKey", Operator: "Equal", Value: "testValue", Effect: "NoSchedule", TolerationSeconds: nil}},
 			podTolerations:            []api.Toleration{{Key: "testKey", Operator: "Equal", Value: "testValue", Effect: "NoSchedule", TolerationSeconds: nil}},
@@ -125,7 +125,7 @@ func TestPodAdmission(t *testing.T) {
 			testName:                  "namespace tolerations",
 		},
 		{
-			pod: bestEffortPod,
+			pod:                       bestEffortPod,
 			defaultClusterTolerations: []api.Toleration{},
 			namespaceTolerations:      []api.Toleration{{Key: "testKey", Operator: "Equal", Value: "testValue", Effect: "NoSchedule", TolerationSeconds: nil}},
 			podTolerations:            []api.Toleration{},
@@ -134,7 +134,7 @@ func TestPodAdmission(t *testing.T) {
 			testName:                  "no pod tolerations",
 		},
 		{
-			pod: bestEffortPod,
+			pod:                       bestEffortPod,
 			defaultClusterTolerations: []api.Toleration{},
 			namespaceTolerations:      []api.Toleration{{Key: "testKey", Operator: "Equal", Value: "testValue", Effect: "NoSchedule", TolerationSeconds: nil}},
 			podTolerations:            []api.Toleration{{Key: "testKey", Operator: "Equal", Value: "testValue1", Effect: "NoSchedule", TolerationSeconds: nil}},
@@ -142,7 +142,7 @@ func TestPodAdmission(t *testing.T) {
 			testName:                  "conflicting pod and namespace tolerations",
 		},
 		{
-			pod: bestEffortPod,
+			pod:                       bestEffortPod,
 			defaultClusterTolerations: []api.Toleration{{Key: "testKey", Operator: "Equal", Value: "testValue2", Effect: "NoSchedule", TolerationSeconds: nil}},
 			namespaceTolerations:      []api.Toleration{},
 			podTolerations:            []api.Toleration{{Key: "testKey", Operator: "Equal", Value: "testValue1", Effect: "NoSchedule", TolerationSeconds: nil}},
@@ -151,7 +151,7 @@ func TestPodAdmission(t *testing.T) {
 			testName:                  "conflicting pod and default cluster tolerations but overridden by empty namespace tolerations",
 		},
 		{
-			pod: bestEffortPod,
+			pod:                       bestEffortPod,
 			defaultClusterTolerations: []api.Toleration{},
 			namespaceTolerations:      []api.Toleration{{Key: "testKey", Operator: "Equal", Value: "testValue", Effect: "NoSchedule", TolerationSeconds: nil}},
 			whitelist:                 []api.Toleration{{Key: "testKey", Operator: "Equal", Value: "testValue", Effect: "NoSchedule", TolerationSeconds: nil}},
@@ -161,7 +161,7 @@ func TestPodAdmission(t *testing.T) {
 			testName:                  "merged pod tolerations satisfy whitelist",
 		},
 		{
-			pod: bestEffortPod,
+			pod:                       bestEffortPod,
 			defaultClusterTolerations: []api.Toleration{{Key: "testKey", Operator: "Equal", Value: "testValue", Effect: "NoSchedule", TolerationSeconds: nil}},
 			namespaceTolerations:      []api.Toleration{},
 			podTolerations:            []api.Toleration{},
@@ -179,7 +179,7 @@ func TestPodAdmission(t *testing.T) {
 			testName:          "pod toleration conflicts with default cluster white list which is overridden by empty namespace whitelist",
 		},
 		{
-			pod: bestEffortPod,
+			pod:                       bestEffortPod,
 			defaultClusterTolerations: []api.Toleration{},
 			namespaceTolerations:      []api.Toleration{{Key: "testKey", Operator: "Equal", Value: "testValue", Effect: "NoSchedule", TolerationSeconds: nil}},
 			whitelist:                 []api.Toleration{{Key: "testKey", Operator: "Equal", Value: "testValue1", Effect: "NoSchedule", TolerationSeconds: nil}},
@@ -188,26 +188,26 @@ func TestPodAdmission(t *testing.T) {
 			testName:                  "merged pod tolerations conflict with the whitelist",
 		},
 		{
-			pod: burstablePod,
+			pod:                       burstablePod,
 			defaultClusterTolerations: []api.Toleration{},
 			namespaceTolerations:      []api.Toleration{{Key: "testKey", Operator: "Equal", Value: "testValue", Effect: "NoSchedule", TolerationSeconds: nil}},
 			whitelist:                 []api.Toleration{},
 			podTolerations:            []api.Toleration{},
 			mergedTolerations: []api.Toleration{
-				{Key: algorithm.TaintNodeMemoryPressure, Operator: api.TolerationOpExists, Effect: api.TaintEffectNoSchedule, TolerationSeconds: nil},
+				{Key: schedulerapi.TaintNodeMemoryPressure, Operator: api.TolerationOpExists, Effect: api.TaintEffectNoSchedule, TolerationSeconds: nil},
 				{Key: "testKey", Operator: "Equal", Value: "testValue", Effect: "NoSchedule", TolerationSeconds: nil},
 			},
 			admit:    true,
 			testName: "added memoryPressure/DiskPressure for Burstable pod",
 		},
 		{
-			pod: guaranteedPod,
+			pod:                       guaranteedPod,
 			defaultClusterTolerations: []api.Toleration{},
 			namespaceTolerations:      []api.Toleration{{Key: "testKey", Operator: "Equal", Value: "testValue", Effect: "NoSchedule", TolerationSeconds: nil}},
 			whitelist:                 []api.Toleration{},
 			podTolerations:            []api.Toleration{},
 			mergedTolerations: []api.Toleration{
-				{Key: algorithm.TaintNodeMemoryPressure, Operator: api.TolerationOpExists, Effect: api.TaintEffectNoSchedule, TolerationSeconds: nil},
+				{Key: schedulerapi.TaintNodeMemoryPressure, Operator: api.TolerationOpExists, Effect: api.TaintEffectNoSchedule, TolerationSeconds: nil},
 				{Key: "testKey", Operator: "Equal", Value: "testValue", Effect: "NoSchedule", TolerationSeconds: nil},
 			},
 			admit:    true,

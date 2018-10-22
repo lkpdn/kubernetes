@@ -68,7 +68,7 @@ var (
 		`)
 
 	notReadyToJoinControPlaneTemp = template.Must(template.New("join").Parse(dedent.Dedent(`
-		One or more conditions for hosting a new control plane instance is not satisfied. 
+		One or more conditions for hosting a new control plane instance is not satisfied.
 
 		{{.Error}}
 
@@ -81,7 +81,7 @@ var (
 
 	joinControPlaneDoneTemp = template.Must(template.New("join").Parse(dedent.Dedent(`
 		This node has joined the cluster and a new control plane instance was created:
-		
+
 		* Certificate signing request was sent to apiserver and approval was received.
 		* The Kubelet was informed of the new secure connection details.
 		* Master label and taint were applied to the new node.
@@ -94,7 +94,7 @@ var (
 			sudo chown $(id -u):$(id -g) $HOME/.kube/config
 
 		Run 'kubectl get nodes' to see this node join the cluster.
-		
+
 		`)))
 
 	joinLongDescription = dedent.Dedent(`
@@ -447,11 +447,6 @@ func (j *Join) CheckIfReadyForAdditionalControlPlane(initConfiguration *kubeadma
 // PrepareForHostingControlPlane makes all preparation activities require for a node hosting a new control plane instance
 func (j *Join) PrepareForHostingControlPlane(initConfiguration *kubeadmapi.InitConfiguration) error {
 
-	// Creates the admin kubeconfig file for the admin and for kubeadm itself.
-	if err := kubeconfigphase.CreateAdminKubeConfigFile(kubeadmconstants.KubernetesDir, initConfiguration); err != nil {
-		return errors.Wrap(err, "error generating the admin kubeconfig file")
-	}
-
 	// Generate missing certificates (if any)
 	if err := certsphase.CreatePKIAssets(initConfiguration); err != nil {
 		return err
@@ -513,10 +508,11 @@ func (j *Join) BootstrapKubelet(tlsBootstrapCfg *clientcmdapi.Config) error {
 		return err
 	}
 
-	// Write env file with flags for the kubelet to use. We do not need to write the --register-with-taints for the master,
-	// as we handle that ourselves in the markmaster phase
-	// TODO: Maybe we want to do that some time in the future, in order to remove some logic from the markmaster phase?
-	if err := kubeletphase.WriteKubeletDynamicEnvFile(&j.cfg.NodeRegistration, j.cfg.FeatureGates, false, kubeadmconstants.KubeletRunDirectory); err != nil {
+	// Write env file with flags for the kubelet to use. We only want to
+	// register the joining node with the specified taints if the node
+	// is not a master. The markmaster phase will register the taints otherwise.
+	registerTaintsUsingFlags := !j.cfg.ControlPlane
+	if err := kubeletphase.WriteKubeletDynamicEnvFile(&j.cfg.NodeRegistration, j.cfg.FeatureGates, registerTaintsUsingFlags, kubeadmconstants.KubeletRunDirectory); err != nil {
 		return err
 	}
 
